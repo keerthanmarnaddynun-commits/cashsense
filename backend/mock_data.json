@@ -1,0 +1,50 @@
+{
+    "business_info": {
+      "name": "Arjun Electronics & Retail",
+      "currency": "INR",
+      "current_cash_balance": 520000
+    },
+    "invoices": [
+      {
+        "invoice_id": "INV-2026-001",
+        "client_name": "TechVeda Solutions",
+        "amount": 185000,
+        "due_date": "2026-07-10",
+        "status": "Pending",
+        "historical_payment_behavior": "Late payer (usually takes +15 days)"
+      },
+      {
+        "invoice_id": "INV-2026-002",
+        "client_name": "Karan Traders",
+        "amount": 95000,
+        "due_date": "2026-07-25",
+        "status": "Pending",
+        "historical_payment_behavior": "Always pays on time"
+      },
+      {
+        "invoice_id": "INV-2026-003",
+        "client_name": "Shiva Logistics",
+        "amount": 310000,
+        "due_date": "2026-06-15",
+        "status": "Pending",
+        "historical_payment_behavior": "Chronically late (needs strict follow-up)"
+      }
+    ],
+    "monthly_expenses": [
+      {
+        "category": "Office Rent & Utilities",
+        "amount": 75000,
+        "due_date": "2026-07-01"
+      },
+      {
+        "category": "Employee Salaries",
+        "amount": 280000,
+        "due_date": "2026-07-05"
+      },
+      {
+        "category": "Inventory Restocking",
+        "amount": 150000,
+        "due_date": "2026-07-20"
+      }
+    ]
+  }
