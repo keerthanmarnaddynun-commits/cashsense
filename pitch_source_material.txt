@@ -1,0 +1,123 @@
+================================================================================
+CASH SENSE - TECHNICAL PITCH DECK SOURCE MATERIAL
+================================================================================
+
+This document contains a comprehensive breakdown of the architectural design, file 
+parsing pipelines, database schemas, and global state overrides developed for CashSense.
+
+--------------------------------------------------------------------------------
+1. THE COMPLETE CURRENT STATE
+--------------------------------------------------------------------------------
+
+CashSense is fully built and verified with a robust, functional, and responsive 
+SaaS micro-architecture:
+
+- Backend Framework: FastAPI (Python 3.13) serving on port 8000.
+  * CORS middleware enabled allowing all origins, headers, and methods.
+  * Robust workspace-root path resolver configuration dynamically injected into `sys.path`.
+  * Auto-reloading stat-reload process for immediate code sync.
+
+- Interactive Dashboard API Endpoints:
+  * GET `/api/financials`: Instantly returns computed liquidity metrics. Draws from
+    in-memory overridden `runtime_metrics` if a custom statement was uploaded, otherwise 
+    dynamically processes local `mock_data.json` records.
+  * POST `/api/chat`: Accepts messages, stores/retrieves history in SQLite, constructs 
+    rich financial context parameters, and queries the Gemma model.
+  * POST `/api/upload`: Handles multipart file uploads (.pdf and .csv), invokes extraction
+    parsers, calls Gemma to synthesize new metrics, and overrides default context state.
+
+- Frontend Dashboard UI (Vite + React + TypeScript + Tailwind):
+  * State-synchronized dashboard view containing high-fidelity glassmorphic cards 
+    displaying: Current Cash, Pending Receivables, Upcoming Expenses, and Forecast Position.
+  * Interactive components: CashRunwayGauge, ForecastConfidence gauge, TodayBriefing risk alert panels.
+  * Reactive file uploader component accepting `.pdf` and `.csv` files. On completion,
+    it refreshes the dashboard view automatically by querying the backend.
+  * Complete TypeScript validation (`npx tsc --noEmit`) and linter checks pass with zero errors.
+
+- Model Specifications:
+  * Fully integrated with Google Gemma 2 open weights community model targeting standard
+    inference endpoints using:
+    - Model target: "gemma-4-31b-it"
+    - Temperature settings: 0.1 for data extraction, 0.3 for advisory chat
+    - Structured mode: Enforced `response_mime_type="application/json"` for statement parsing.
+
+--------------------------------------------------------------------------------
+2. EXTRACTION DEEP DIVE (AI SYNTHESIS PIPELINE)
+--------------------------------------------------------------------------------
+
+Whenever a financial document is uploaded via the `/api/upload` endpoint:
+
+1. File Stream Reading:
+   - The file is received as an asynchronous `UploadFile` stream.
+   - Raw bytes are read into memory using `await file.read()`.
+
+2. File Type Parsing:
+   - `.pdf` files are parsed page-by-page by `pypdf.PdfReader` via an in-memory `io.BytesIO` stream.
+   - `.csv` files are parsed into a Pandas DataFrame using `pd.read_csv` and formatted into a text string representation using `df.to_string()`.
+
+3. AI Structured Extraction (Gemma):
+   - Extracted text is fed to `client.models.generate_content` targeting the model `"gemma-4-31b-it"`.
+   - The system instructions dictate that Gemma must act as a strict financial parser, mapping the text precisely to a JSON schema:
+     {
+       "current_cash": number,
+       "total_receivables": number,
+       "total_expenses": number,
+       "at_risk_amount": number,
+       "net_forecast_position": number,
+       "overdue_invoices": [
+         {
+           "invoice_id": string,
+           "client_name": string,
+           "amount": number,
+           "due_date": string,
+           "status": string,
+           "historical_payment_behavior": string
+         }
+       ]
+     }
+   - Fallback logic: Under a critical instruction, if the file contains only empty templates, instructions, labels, or no explicit balances, all numerical fields default to 0 and `overdue_invoices` returns `[]`.
+   - The config parameter `response_mime_type="application/json"` guarantees a valid, parseable JSON payload.
+
+--------------------------------------------------------------------------------
+3. DATABASE SCHEMA & STATE OVERRIDES
+--------------------------------------------------------------------------------
+
+- SQLite Database Engine:
+  * Persistent storage mapped to a local `cashsense.db` file.
+  * SQLAlchemy ORM mapped tables created automatically during the FastAPI `startup` event.
+
+- DDL Schema Mapping:
+
+  * conversations Table:
+    CREATE TABLE conversations (
+        id VARCHAR NOT NULL, 
+        created_at DATETIME, 
+        PRIMARY KEY (id)
+    );
+
+  * messages Table:
+    CREATE TABLE messages (
+        id INTEGER NOT NULL, 
+        conversation_id VARCHAR NOT NULL, 
+        role VARCHAR NOT NULL, 
+        content TEXT NOT NULL, 
+        timestamp DATETIME, 
+        PRIMARY KEY (id), 
+        FOREIGN KEY(conversation_id) REFERENCES conversations (id)
+    );
+
+  * financial_snapshots Table:
+    CREATE TABLE financial_snapshots (
+        id INTEGER NOT NULL, 
+        conversation_id VARCHAR NOT NULL, 
+        raw_data_json TEXT NOT NULL, 
+        created_at DATETIME, 
+        PRIMARY KEY (id), 
+        FOREIGN KEY(conversation_id) REFERENCES conversations (id)
+    );
+
+- In-Memory State Overrides:
+  * A global in-memory state variable `runtime_metrics` is maintained inside `backend/main.py`.
+  * Initially set to `None`. When a user successfully uploads a file through `/api/upload`, `runtime_metrics` is overwritten with the parsed JSON metrics returned from the Gemma model.
+  * Subsequent GET queries to `/api/financials` check this variable first. If it is active, the mock file is bypassed and the uploaded metrics are served directly.
+  * Similarly, the POST `/api/chat` route reads `runtime_metrics` if available to inject updated business metrics into the Gemma context prompt, keeping the financial advisory copilot aligned with the current uploaded session.

@@ -1,5 +1,9 @@
-import json
+import sys
 import os
+# Add current directory to path to resolve database imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import json
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -194,7 +198,7 @@ def post_chat(request: ChatRequest, db: Session = Depends(get_db)):
         ]
         
         response = client.models.generate_content(
-            model="gemini-flash-latest",
+            model="gemma-4-31b-it",
             contents=contents,
             config=types.GenerateContentConfig(
                 system_instruction=context,
@@ -273,7 +277,7 @@ async def upload_file(file: UploadFile = File(...)):
     
     try:
         response = client.models.generate_content(
-            model="gemini-flash-latest",
+            model="gemma-4-31b-it",
             contents=f"Extracted content:\n{extracted_text}",
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,

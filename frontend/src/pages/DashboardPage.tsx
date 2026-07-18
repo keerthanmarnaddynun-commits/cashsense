@@ -26,6 +26,7 @@ export const DashboardPage: React.FC = () => {
     try {
       const updatedMetrics = await uploadFinancialDocument(file);
       setFinancials(updatedMetrics);
+      await fetchDashboardData();
     } catch (err: any) {
       console.error(err);
       setUploadError(err.message || 'Failed to parse file.');
