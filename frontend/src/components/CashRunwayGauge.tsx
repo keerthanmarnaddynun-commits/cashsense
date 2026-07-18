@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { CalendarRange, ShieldCheck, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { CalendarRange, ShieldCheck, ShieldAlert, AlertTriangle, FileUp } from 'lucide-react';
 
 interface CashRunwayGaugeProps {
-  runwayDays: number; // e.g. 18
+  runwayDays?: number | null;
   isLoading: boolean;
 }
 
@@ -10,21 +10,22 @@ export const CashRunwayGauge: React.FC<CashRunwayGaugeProps> = ({ runwayDays, is
   const [animatedOffset, setAnimatedOffset] = useState(314.16);
   const maxRunway = 60;
   
-  // Calculate percentage
-  const percentage = Math.min(Math.max((runwayDays / maxRunway) * 100, 0), 100);
-  
   // Circumference of circular gauge (r = 50)
   const circumference = 2 * Math.PI * 50;
 
+  // Determine actual days
+  const actualDays = runwayDays !== undefined && runwayDays !== null ? runwayDays : 0;
+  const percentage = Math.min(Math.max((actualDays / maxRunway) * 100, 0), 100);
+
   useEffect(() => {
-    if (!isLoading) {
+    if (!isLoading && runwayDays !== null && runwayDays !== undefined) {
       const timer = setTimeout(() => {
         const offset = circumference - (percentage / 100) * circumference;
         setAnimatedOffset(offset);
       }, 150);
       return () => clearTimeout(timer);
     }
-  }, [percentage, isLoading, circumference]);
+  }, [percentage, isLoading, circumference, runwayDays]);
 
   const getGaugeColors = (days: number) => {
     if (days >= 30) {
@@ -60,9 +61,6 @@ export const CashRunwayGauge: React.FC<CashRunwayGaugeProps> = ({ runwayDays, is
     }
   };
 
-  const colors = getGaugeColors(runwayDays);
-  const StatusIcon = colors.icon;
-
   if (isLoading) {
     return (
       <div className="glow-card bg-charcoal-card rounded-[24px] p-6 flex flex-col items-center justify-center h-full animate-pulse border border-charcoal-border">
@@ -73,13 +71,32 @@ export const CashRunwayGauge: React.FC<CashRunwayGaugeProps> = ({ runwayDays, is
     );
   }
 
+  // Graceful Empty State check
+  const isDataMissing = runwayDays === null || runwayDays === undefined || runwayDays === 0;
+
+  if (isDataMissing) {
+    return (
+      <div className="glow-card bg-charcoal-card rounded-[24px] p-6 flex flex-col items-center justify-center text-center border border-charcoal-border h-full relative overflow-hidden transition-all duration-300">
+        <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 blur-xl rounded-full pointer-events-none" />
+        <div className="p-4 bg-white/[0.02] border border-dashed border-white/10 rounded-full text-indigo-400 mb-4 shrink-0">
+          <FileUp className="h-7 w-7 animate-pulse text-indigo-400" />
+        </div>
+        <h3 className="text-sm font-bold text-white tracking-tight">Runway Unavailable</h3>
+        <p className="text-xs text-gray-400 mt-2 max-w-[240px] leading-relaxed">
+          Upload a transaction statement or invoice CSV to automatically calculate runway days.
+        </p>
+      </div>
+    );
+  }
+
+  const colors = getGaugeColors(actualDays);
+  const StatusIcon = colors.icon;
+
   return (
     <div className={`glow-card bg-charcoal-card rounded-[24px] p-6 flex flex-col sm:flex-row items-center justify-between gap-6 border border-charcoal-border transition-all duration-300 ${colors.glow}`}>
       
-      {/* Circle Gauge on Left */}
       <div className="relative flex items-center justify-center shrink-0">
         <svg className="w-36 h-36 transform -rotate-90">
-          {/* Background circle track */}
           <circle
             cx="72"
             cy="72"
@@ -87,7 +104,6 @@ export const CashRunwayGauge: React.FC<CashRunwayGaugeProps> = ({ runwayDays, is
             className="stroke-gray-800 fill-none"
             strokeWidth="8"
           />
-          {/* Foreground progress circle */}
           <circle
             cx="72"
             cy="72"
@@ -99,10 +115,9 @@ export const CashRunwayGauge: React.FC<CashRunwayGaugeProps> = ({ runwayDays, is
             strokeLinecap="round"
           />
         </svg>
-        {/* Inside Text */}
         <div className="absolute text-center">
           <span className="text-3xl font-extrabold text-white block tracking-tight">
-            {runwayDays}
+            {actualDays}
           </span>
           <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider block mt-0.5">
             Days
@@ -110,7 +125,6 @@ export const CashRunwayGauge: React.FC<CashRunwayGaugeProps> = ({ runwayDays, is
         </div>
       </div>
 
-      {/* Runway Analytics Content */}
       <div className="flex-1 text-center sm:text-left">
         <div className="flex items-center justify-center sm:justify-start gap-2">
           <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full border ${colors.bg} ${colors.text} ${colors.border}`}>
@@ -124,7 +138,7 @@ export const CashRunwayGauge: React.FC<CashRunwayGaugeProps> = ({ runwayDays, is
         </h3>
         
         <p className="text-sm text-gray-300 mt-1 max-w-[280px] sm:max-w-none">
-          Estimated cash runway is <span className={`font-semibold ${colors.text}`}>{runwayDays} Days</span> until projected cash shortage occurs.
+          Estimated cash runway is <span className={`font-semibold ${colors.text}`}>{actualDays} Days</span> until projected cash shortage occurs.
         </p>
 
         <div className="h-[1px] bg-white/5 my-4" />
@@ -141,7 +155,7 @@ export const CashRunwayGauge: React.FC<CashRunwayGaugeProps> = ({ runwayDays, is
           <div>
             <span className="text-[10px] text-gray-500 uppercase tracking-wider block">Status</span>
             <span className={`font-semibold mt-0.5 block ${colors.text}`}>
-              {runwayDays >= 30 ? 'Runway Healthy' : runwayDays >= 15 ? 'Runway Warning' : 'Critical Shortfall Risk'}
+              {actualDays >= 30 ? 'Runway Healthy' : actualDays >= 15 ? 'Runway Warning' : 'Critical Shortfall Risk'}
             </span>
           </div>
         </div>
@@ -149,3 +163,4 @@ export const CashRunwayGauge: React.FC<CashRunwayGaugeProps> = ({ runwayDays, is
     </div>
   );
 };
+export default CashRunwayGauge;

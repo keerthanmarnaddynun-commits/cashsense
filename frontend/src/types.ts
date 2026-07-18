@@ -31,3 +31,15 @@ export interface ChatMessage {
   timestamp: string;
   isError?: boolean;
 }
+
+export interface FlexibleMetric {
+  value: number | null;
+  confidence?: number;
+}
+
+export interface FlexibleFinancialData {
+  metrics: Record<string, FlexibleMetric>;
+  dynamicFields: Record<string, FlexibleMetric>;
+  alerts: string[];
+  invoices: OverdueInvoice[];
+}

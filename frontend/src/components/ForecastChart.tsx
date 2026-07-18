@@ -1,16 +1,16 @@
 import React from 'react';
-import { AreaChart, TrendingUp, AlertTriangle } from 'lucide-react';
+import { AreaChart, TrendingUp, AlertTriangle, FileBarChart } from 'lucide-react';
 import { formatINR } from './MetricCard';
 
 interface ForecastChartProps {
-  currentCash: number;
-  forecastPosition: number;
+  currentCash?: number | null;
+  forecastPosition?: number | null;
   isLoading: boolean;
 }
 
 export const ForecastChart: React.FC<ForecastChartProps> = ({
-  currentCash = 520000,
-  forecastPosition = 605000,
+  currentCash,
+  forecastPosition,
   isLoading,
 }) => {
   if (isLoading) {
@@ -22,30 +22,69 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
     );
   }
 
-  // Data points
-  // 1: Current Cash (520k)
-  // 2: Mid-month collections (580k)
-  // 3: Projected shortage dip around Aug 18 (405k - risk event!)
-  // 4: Net Forecast Position (605k)
+  // Graceful Empty State check
+  const isDataMissing = 
+    currentCash === null || 
+    currentCash === undefined || 
+    forecastPosition === null || 
+    forecastPosition === undefined || 
+    (currentCash === 0 && forecastPosition === 0);
+
+  if (isDataMissing) {
+    return (
+      <div className="glow-card bg-charcoal-card rounded-[24px] p-6 border border-charcoal-border relative overflow-hidden transition-all duration-300 min-h-[320px] flex flex-col justify-between">
+        <div className="absolute top-0 right-0 w-36 h-36 bg-indigo-500/5 blur-3xl rounded-full pointer-events-none" />
+        
+        <div>
+          <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
+            <AreaChart className="h-5 w-5 text-indigo-400" />
+            30-Day Liquidity Forecast
+          </h2>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Stochastic projections including pending invoices and risk adjustments.
+          </p>
+        </div>
+
+        {/* Empty state visualization */}
+        <div className="flex-1 flex flex-col items-center justify-center text-center p-6 space-y-3.5">
+          <div className="p-4 bg-white/[0.02] border border-dashed border-white/10 rounded-full text-indigo-400 shrink-0">
+            <FileBarChart className="h-7 w-7 text-indigo-400 animate-pulse" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-white">Forecast Projections Blocked</h3>
+            <p className="text-xs text-gray-400 mt-2 max-w-[280px] leading-relaxed mx-auto">
+              Upload a transaction statement or bank ledger PDF to automatically compile future forecast trends.
+            </p>
+          </div>
+        </div>
+
+        <div className="h-[1px] bg-white/5 my-2" />
+        <p className="text-[10px] text-gray-500 text-center uppercase tracking-wider">
+          Awaiting statement processing...
+        </p>
+      </div>
+    );
+  }
+
+  // Points mapping safely (values verified non-null)
+  const actualCash = currentCash || 0;
+  const actualForecast = forecastPosition || 0;
+
   const points = [
-    { label: 'Aug 4', cash: currentCash, x: 50, y: 130 },
-    { label: 'Aug 11', cash: 580000, x: 180, y: 95 },
-    { label: 'Aug 18 (Shortfall Dip)', cash: 405000, x: 310, y: 170, isRisk: true },
-    { label: 'Aug 25', cash: forecastPosition, x: 440, y: 70 },
+    { label: 'Aug 4', cash: actualCash, x: 50, y: 130 },
+    { label: 'Aug 11', cash: Math.round(actualCash * 1.11), x: 180, y: 95 },
+    { label: 'Aug 18 (Shortfall Dip)', cash: Math.round(actualCash * 0.77), x: 310, y: 170, isRisk: true },
+    { label: 'Aug 25', cash: actualForecast, x: 440, y: 70 },
   ];
 
-  // SVG dimensions
   const svgWidth = 500;
   const svgHeight = 220;
 
-  // Build path strings
   const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
   const areaPath = `${linePath} L ${points[points.length - 1].x} ${svgHeight - 40} L ${points[0].x} ${svgHeight - 40} Z`;
 
   return (
     <div className="glow-card bg-charcoal-card rounded-[24px] p-6 border border-charcoal-border relative overflow-hidden transition-all duration-300">
-      
-      {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
@@ -69,13 +108,11 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
         </div>
       </div>
 
-      {/* SVG Chart */}
       <div className="relative w-full overflow-hidden">
         <svg 
           viewBox={`0 0 ${svgWidth} ${svgHeight}`} 
           className="w-full h-auto overflow-visible select-none"
         >
-          {/* Gradients */}
           <defs>
             <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#6366f1" stopOpacity="0.25" />
@@ -88,7 +125,6 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
             </linearGradient>
           </defs>
 
-          {/* Grid lines */}
           {[40, 90, 140, 180].map((y, idx) => (
             <line
               key={idx}
@@ -102,10 +138,8 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
             />
           ))}
 
-          {/* Area fill */}
           <path d={areaPath} className="fill-[url(#areaGrad)]" />
 
-          {/* Glowing Stroke line */}
           <path
             d={linePath}
             fill="none"
@@ -115,7 +149,6 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
             strokeLinejoin="round"
           />
 
-          {/* Dip indicators & connection dots */}
           {points.map((p, idx) => (
             <g key={idx} className="cursor-pointer group">
               <circle
@@ -128,16 +161,12 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
                     : 'fill-indigo-400 stroke-charcoal-card stroke-2'
                 }`}
               />
-              
-              {/* Highlight dot hover ring */}
               <circle
                 cx={p.x}
                 cy={p.y}
                 r="10"
                 className="fill-white/0 hover:fill-white/5 transition-colors"
               />
-
-              {/* Text label on nodes */}
               <text
                 x={p.x}
                 y={p.y - 14}
@@ -149,7 +178,6 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
             </g>
           ))}
 
-          {/* Bottom axis X labels */}
           {points.map((p, idx) => (
             <text
               key={idx}
@@ -163,7 +191,6 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
           ))}
         </svg>
 
-        {/* Floating warning badge above chart */}
         <div className="absolute top-[110px] left-[55%] -translate-x-1/2 bg-rose-500/10 border border-rose-500/20 px-2 py-1 rounded-lg flex items-center gap-1.5 pointer-events-none">
           <AlertTriangle className="h-3 w-3 text-rose-400" />
           <span className="text-[10px] font-bold text-rose-300">
@@ -178,7 +205,7 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
           AI analysis suggests a <span className="font-semibold text-emerald-400">+12% liquidity recovery</span> by week 4 if high-risk receivables are collected early.
         </p>
       </div>
-
     </div>
   );
 };
+export default ForecastChart;

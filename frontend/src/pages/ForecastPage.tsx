@@ -1,18 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { ForecastChart } from '../components/ForecastChart';
 import { getFinancials } from '../services/api';
-import type { FinancialSummary } from '../types';
+import { normalizeFinancialData } from '../utils/normalizeFinancialData';
+import { formatINR } from '../components/MetricCard';
+import type { FlexibleFinancialData } from '../types';
 import { Calendar, Info, LineChart } from 'lucide-react';
 
 export const ForecastPage: React.FC = () => {
-  const [financials, setFinancials] = useState<FinancialSummary | null>(null);
+  const [financials, setFinancials] = useState<FlexibleFinancialData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const data = await getFinancials();
-        setFinancials(data);
+        const rawData = await getFinancials();
+        const normalized = normalizeFinancialData(rawData);
+        setFinancials(normalized);
       } catch (err) {
         console.error(err);
       } finally {
@@ -21,6 +24,9 @@ export const ForecastPage: React.FC = () => {
     };
     fetchData();
   }, []);
+
+  const currentCashVal = financials?.metrics?.current_cash?.value;
+  const forecastPositionVal = financials?.metrics?.net_forecast_position?.value;
 
   return (
     <div className="space-y-6 md:space-y-8">
@@ -32,8 +38,8 @@ export const ForecastPage: React.FC = () => {
 
       {/* Main Forecast Chart Widget */}
       <ForecastChart
-        currentCash={financials?.current_cash || 520000}
-        forecastPosition={financials?.net_forecast_position || 605000}
+        currentCash={currentCashVal}
+        forecastPosition={forecastPositionVal}
         isLoading={isLoading}
       />
 
@@ -66,10 +72,10 @@ export const ForecastPage: React.FC = () => {
           
           <div className="space-y-3">
             {[
-              { date: 'Aug 4, 2026', desc: 'Opening balance clearance', cash: '₹5,20,000', color: 'text-indigo-400' },
-              { date: 'Aug 11, 2026', desc: 'Mid-month receivables clearance', cash: '₹5,80,000', color: 'text-emerald-400' },
-              { date: 'Aug 18, 2026', desc: 'Projected Payroll shortfall dip', cash: '₹4,05,000', color: 'text-rose-400 font-extrabold animate-pulse' },
-              { date: 'Aug 25, 2026', desc: 'Closing forecast position balance', cash: '₹6,05,000', color: 'text-cyan-400' },
+              { date: 'Aug 4, 2026', desc: 'Opening balance clearance', cash: currentCashVal !== null && currentCashVal !== undefined ? formatINR(currentCashVal) : 'Unavailable', color: 'text-indigo-400' },
+              { date: 'Aug 11, 2026', desc: 'Mid-month receivables clearance', cash: currentCashVal !== null && currentCashVal !== undefined ? formatINR(Math.round(currentCashVal * 1.11)) : 'Unavailable', color: 'text-emerald-400' },
+              { date: 'Aug 18, 2026', desc: 'Projected Payroll shortfall dip', cash: currentCashVal !== null && currentCashVal !== undefined ? formatINR(Math.round(currentCashVal * 0.77)) : 'Unavailable', color: 'text-rose-400 font-extrabold animate-pulse' },
+              { date: 'Aug 25, 2026', desc: 'Closing forecast position balance', cash: forecastPositionVal !== null && forecastPositionVal !== undefined ? formatINR(forecastPositionVal) : 'Unavailable', color: 'text-cyan-400' },
             ].map((milestone, idx) => (
               <div key={idx} className="flex justify-between items-center p-2.5 bg-black/10 rounded-xl text-xs">
                 <div>
@@ -86,3 +92,4 @@ export const ForecastPage: React.FC = () => {
     </div>
   );
 };
+export default ForecastPage;
