@@ -4,8 +4,9 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from backend.parsers import extract_text_from_pdf, extract_data_from_csv
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from google import genai
@@ -24,6 +25,9 @@ app = FastAPI()
 @app.on_event("startup")
 def startup_event():
     Base.metadata.create_all(bind=engine)
+
+# Global runtime state variable to hold uploaded financials
+runtime_metrics = None
 
 # Apply CORSMiddleware to the app
 app.add_middleware(
@@ -100,13 +104,16 @@ class ChatRequest(BaseModel):
 
 @app.get("/api/financials")
 def get_financials():
+    global runtime_metrics
+    if runtime_metrics is not None:
+        return runtime_metrics
     data = load_financial_data()
     metrics = calculate_metrics(data)
     return metrics
 
 @app.post("/api/chat")
 def post_chat(request: ChatRequest, db: Session = Depends(get_db)):
-    global client
+    global client, runtime_metrics
     if client is None:
         raise HTTPException(status_code=500, detail="AI Client not configured.")
     
@@ -139,14 +146,25 @@ def post_chat(request: ChatRequest, db: Session = Depends(get_db)):
         })
         
     # Load business financials context
-    try:
-        data = load_financial_data()
-        metrics = calculate_metrics(data)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to load business financial data: {str(e)}")
+    if runtime_metrics is not None:
+        metrics = runtime_metrics
+        try:
+            data = load_financial_data()
+            business_name = data.get("business_info", {}).get("name", "Uploaded Corp")
+            currency = data.get("business_info", {}).get("currency", "INR")
+        except Exception:
+            business_name = "Uploaded Corp"
+            currency = "INR"
+    else:
+        try:
+            data = load_financial_data()
+            metrics = calculate_metrics(data)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to load business financial data: {str(e)}")
+        
+        business_name = data.get("business_info", {}).get("name", "N/A")
+        currency = data.get("business_info", {}).get("currency", "N/A")
     
-    business_name = data.get("business_info", {}).get("name", "N/A")
-    currency = data.get("business_info", {}).get("currency", "N/A")
     current_cash = metrics["current_cash"]
     total_receivables = metrics["total_receivables"]
     total_expenses = metrics["total_expenses"]
@@ -211,5 +229,66 @@ def post_chat(request: ChatRequest, db: Session = Depends(get_db)):
         "conversation_id": conversation_id,
         "response": response_text
     }
+
+@app.post("/api/upload")
+async def upload_file(file: UploadFile = File(...)):
+    global client, runtime_metrics
+    filename = file.filename or ""
+    
+    if filename.endswith(".pdf"):
+        file_bytes = await file.read()
+        extracted_text = extract_text_from_pdf(file_bytes)
+    elif filename.endswith(".csv"):
+        file_bytes = await file.read()
+        extracted_text = extract_data_from_csv(file_bytes)
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported file format. Please upload a PDF or CSV.")
+        
+    if client is None:
+        raise HTTPException(status_code=500, detail="AI Client not configured.")
+        
+    system_instruction = (
+        "You are a strict financial parsing engine. Analyze the provided financial data/text and output "
+        "a single JSON object matching this schema precisely:\n"
+        "{\n"
+        "  \"current_cash\": number,\n"
+        "  \"total_receivables\": number,\n"
+        "  \"total_expenses\": number,\n"
+        "  \"at_risk_amount\": number,\n"
+        "  \"net_forecast_position\": number,\n"
+        "  \"overdue_invoices\": [\n"
+        "    {\n"
+        "      \"invoice_id\": string,\n"
+        "      \"client_name\": string,\n"
+        "      \"amount\": number,\n"
+        "      \"due_date\": string,\n"
+        "      \"status\": string,\n"
+        "      \"historical_payment_behavior\": string\n"
+        "    }\n"
+        "  ]\n"
+        "}\n"
+        "CRITICAL RULE: If the provided data/text contains only blank templates, instructions, labels, or no explicit numerical balances, set all numeric values (current_cash, total_receivables, total_expenses, at_risk_amount, net_forecast_position) to 0 and set overdue_invoices to an empty array []. You must always return a valid, parseable JSON object matching the requested schema under all circumstances.\n"
+        "Do not include any Markdown wrapper, quotes, or trailing comments. Output only the raw valid JSON."
+    )
+    
+    try:
+        response = client.models.generate_content(
+            model="gemini-flash-latest",
+            contents=f"Extracted content:\n{extracted_text}",
+            config=types.GenerateContentConfig(
+                system_instruction=system_instruction,
+                temperature=0.1,
+                response_mime_type="application/json"
+            )
+        )
+        parsed_metrics = json.loads(response.text)
+        runtime_metrics = parsed_metrics
+        return {
+            "message": "File processed and financials updated successfully",
+            "metrics": parsed_metrics
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI synthesis failed: {str(e)}")
+
 
 

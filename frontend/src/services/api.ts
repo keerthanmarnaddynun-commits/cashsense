@@ -38,3 +38,30 @@ export async function sendChatMessage(message: string): Promise<ChatResponse> {
 
   return response.json();
 }
+
+export async function uploadFinancialDocument(file: File): Promise<FinancialSummary> {
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  const response = await fetch(`${BASE_URL}/api/upload`, {
+    method: 'POST',
+    body: formData,
+  });
+  
+  if (!response.ok) {
+    let errorDetail = 'Upload failed';
+    try {
+      const errData = await response.json();
+      if (errData && errData.detail) {
+        errorDetail = errData.detail;
+      }
+    } catch {
+      // ignore
+    }
+    throw new Error(errorDetail);
+  }
+  
+  const data = await response.json();
+  return data.metrics;
+}
+

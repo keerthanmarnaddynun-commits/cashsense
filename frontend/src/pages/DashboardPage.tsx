@@ -5,15 +5,34 @@ import { MetricCard } from '../components/MetricCard';
 import { CashRunwayGauge } from '../components/CashRunwayGauge';
 import { ForecastConfidence } from '../components/ForecastConfidence';
 import { TodayBriefing } from '../components/TodayBriefing';
-import { getFinancials } from '../services/api';
+import { getFinancials, uploadFinancialDocument } from '../services/api';
 import type { FinancialSummary } from '../types';
-import { Wallet, HandCoins, Receipt, TrendingUp, AlertCircle, RefreshCw } from 'lucide-react';
+import { Wallet, HandCoins, Receipt, TrendingUp, AlertCircle, RefreshCw, UploadCloud, Loader2 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const [financials, setFinancials] = useState<FinancialSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    setIsUploading(true);
+    setUploadError(null);
+    try {
+      const updatedMetrics = await uploadFinancialDocument(file);
+      setFinancials(updatedMetrics);
+    } catch (err: any) {
+      console.error(err);
+      setUploadError(err.message || 'Failed to parse file.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const fetchDashboardData = async () => {
     setIsLoading(true);
@@ -47,6 +66,48 @@ export const DashboardPage: React.FC = () => {
       <div>
         <h2 className="text-xl font-bold text-white tracking-tight">Executive Dashboard</h2>
         <p className="text-xs text-gray-400 mt-0.5">Real-time working capital analytics and AI predictions.</p>
+      </div>
+
+      {/* File Upload Banner */}
+      <div className="bg-white/5 border border-white/10 rounded-[20px] p-5 backdrop-blur-md">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-bold text-white">Upload Ledger or Invoice Summary</h3>
+            <p className="text-[11px] text-gray-400 mt-1">Upload a PDF or CSV file to override default financial metrics using AI synthesis.</p>
+          </div>
+          <div className="relative shrink-0">
+            <input
+              type="file"
+              accept=".pdf,.csv"
+              onChange={handleFileUpload}
+              className="hidden"
+              id="financial-file-upload"
+              disabled={isUploading}
+            />
+            <label
+              htmlFor="financial-file-upload"
+              className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-xs font-bold transition-all cursor-pointer select-none
+                ${isUploading 
+                  ? 'bg-white/10 border-white/20 text-gray-400 cursor-not-allowed' 
+                  : 'bg-indigo-600 border-indigo-500 hover:bg-indigo-500 text-white active:scale-95'}`}
+            >
+              {isUploading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <UploadCloud className="h-4 w-4" />
+                  Upload Statement
+                </>
+              )}
+            </label>
+          </div>
+        </div>
+        {uploadError && (
+          <p className="text-[11px] text-rose-400 mt-2 font-medium">{uploadError}</p>
+        )}
       </div>
 
       {/* Backend connection warning alert */}
