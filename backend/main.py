@@ -1,18 +1,29 @@
 import json
 import os
+import uuid
 from datetime import datetime
-from fastapi import FastAPI, HTTPException
+from typing import Optional
+
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+from sqlalchemy.orm import Session
+
+from database import engine, Base, get_db, Conversation, Message, save_financial_snapshot
 
 # Invoke load_dotenv immediately after imports
 load_dotenv()
 
 # Instantiate a FastAPI application
 app = FastAPI()
+
+# Apply Base metadata creation on startup event
+@app.on_event("startup")
+def startup_event():
+    Base.metadata.create_all(bind=engine)
 
 # Apply CORSMiddleware to the app
 app.add_middleware(
@@ -85,6 +96,7 @@ def calculate_metrics(data):
 
 class ChatRequest(BaseModel):
     message: str
+    conversation_id: Optional[str] = None
 
 @app.get("/api/financials")
 def get_financials():
@@ -93,13 +105,45 @@ def get_financials():
     return metrics
 
 @app.post("/api/chat")
-def post_chat(request: ChatRequest):
+def post_chat(request: ChatRequest, db: Session = Depends(get_db)):
     global client
     if client is None:
         raise HTTPException(status_code=500, detail="AI Client not configured.")
     
-    data = load_financial_data()
-    metrics = calculate_metrics(data)
+    # 1. Retrieve or generate conversation
+    conversation_id = request.conversation_id
+    if not conversation_id:
+        conversation_id = str(uuid.uuid4())
+        try:
+            db_conv = Conversation(id=conversation_id)
+            db.add(db_conv)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=f"Failed to create conversation: {str(e)}")
+    else:
+        # Validate existence of conversation
+        db_conv = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+        if not db_conv:
+            raise HTTPException(status_code=400, detail="Invalid conversation ID provided.")
+            
+    # 2. History retrieval
+    db_messages = db.query(Message).filter(Message.conversation_id == conversation_id).order_by(Message.timestamp.asc()).all()
+    
+    # 3. Gemini history formatting
+    history = []
+    for msg in db_messages:
+        history.append({
+            "role": msg.role,
+            "parts": [{"text": msg.content}]
+        })
+        
+    # Load business financials context
+    try:
+        data = load_financial_data()
+        metrics = calculate_metrics(data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load business financial data: {str(e)}")
     
     business_name = data.get("business_info", {}).get("name", "N/A")
     currency = data.get("business_info", {}).get("currency", "N/A")
@@ -122,17 +166,50 @@ def post_chat(request: ChatRequest):
         f"Overdue Invoices: {overdue_invoices_json}\n"
     )
     
+    # 4. AI generation with historical chat feed
     try:
+        contents = history + [
+            {
+                "role": "user",
+                "parts": [{"text": request.message}]
+            }
+        ]
+        
         response = client.models.generate_content(
             model="gemini-flash-latest",
-            contents=request.message,
+            contents=contents,
             config=types.GenerateContentConfig(
                 system_instruction=context,
                 temperature=0.3
             )
         )
-        return {"response": response.text}
+        response_text = response.text
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Gemini API Client Error: {str(e)}")
+        
+    # 5. Save responses to database
+    try:
+        user_msg = Message(
+            conversation_id=conversation_id,
+            role="user",
+            content=request.message
+        )
+        model_msg = Message(
+            conversation_id=conversation_id,
+            role="model",
+            content=response_text
+        )
+        db.add(user_msg)
+        db.add(model_msg)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database record save failed: {str(e)}")
+        
+    # 6. Return payload
+    return {
+        "conversation_id": conversation_id,
+        "response": response_text
+    }
 
 
