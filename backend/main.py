@@ -6,7 +6,7 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from backend.parsers import extract_text_from_pdf, extract_data_from_csv
+from parsers import extract_text_from_pdf, extract_data_from_csv
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from google import genai
