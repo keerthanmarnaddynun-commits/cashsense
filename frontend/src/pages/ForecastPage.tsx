@@ -1,46 +1,28 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { ForecastChart } from '../components/ForecastChart';
-import { getFinancials } from '../services/api';
-import { normalizeFinancialData } from '../utils/normalizeFinancialData';
+import { useBatchStore } from '../store/batchStore';
 import { formatINR } from '../components/MetricCard';
-import type { FlexibleFinancialData } from '../types';
 import { Calendar, Info, LineChart } from 'lucide-react';
 
 export const ForecastPage: React.FC = () => {
-  const [financials, setFinancials] = useState<FlexibleFinancialData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { analytics, loading } = useBatchStore();
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const rawData = await getFinancials();
-        const normalized = normalizeFinancialData(rawData);
-        setFinancials(normalized);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchData();
-  }, []);
-
-  const currentCashVal = financials?.metrics?.current_cash?.value;
-  const forecastPositionVal = financials?.metrics?.net_forecast_position?.value;
+  const currentCashVal = analytics?.kpis?.current_cash;
+  const forecastPositionVal = analytics?.kpis?.net_forecast_position;
 
   return (
     <div className="space-y-6 md:space-y-8">
       {/* Header */}
       <div>
         <h2 className="text-xl font-bold text-white tracking-tight">Liquidity Forecast</h2>
-        <p className="text-xs text-gray-400 mt-0.5 font-medium">30-day deterministic cash flow models.</p>
+        <p className="text-xs text-gray-400 mt-0.5 font-medium">30-day cash flow projections.</p>
       </div>
 
       {/* Main Forecast Chart Widget */}
       <ForecastChart
         currentCash={currentCashVal}
         forecastPosition={forecastPositionVal}
-        isLoading={isLoading}
+        isLoading={loading}
       />
 
       {/* Analytics Cards Grid */}
@@ -58,7 +40,7 @@ export const ForecastPage: React.FC = () => {
           <div className="mt-4 p-3 bg-indigo-500/[0.02] border border-indigo-500/10 rounded-xl flex items-start gap-2.5">
             <Info className="h-4 w-4 text-indigo-400 shrink-0 mt-0.5" />
             <span className="text-[11px] text-indigo-300 leading-normal font-semibold">
-              Adjusted for Shiva Logistics history (avg clearance delay: 42 days).
+              Adjusted for current workspace invoices collection histories.
             </span>
           </div>
         </div>

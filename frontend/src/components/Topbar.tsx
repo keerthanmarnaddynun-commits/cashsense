@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Bell, Activity, ShieldAlert, BadgeInfo } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { BatchSelector } from './BatchSelector';
 
 interface TopbarProps {
   connectionStatus: 'connected' | 'connecting' | 'error';
@@ -18,11 +19,9 @@ export const Topbar: React.FC<TopbarProps> = ({ connectionStatus }) => {
   return (
     <header className="h-16 border-b border-white/5 bg-[#121626]/80 backdrop-blur-md sticky top-0 z-30 flex items-center justify-between px-8 select-none">
       
-      {/* Search placeholder or page context title */}
+      {/* Batch selector context title */}
       <div>
-        <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">
-          SaaS Operating Frame
-        </span>
+        <BatchSelector />
       </div>
 
       {/* Utilities: status, notifications, profile */}

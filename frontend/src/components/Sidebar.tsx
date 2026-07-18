@@ -10,7 +10,8 @@ import {
   Bot, 
   Settings, 
   LogOut,
-  Sparkles
+  Sparkles,
+  Briefcase
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
@@ -20,6 +21,7 @@ export const Sidebar: React.FC = () => {
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { name: 'Forecast', path: '/forecast', icon: TrendingUp },
     { name: 'Invoices', path: '/invoices', icon: FileText },
+    { name: 'Workspaces', path: '/batches', icon: Briefcase },
     { name: 'Actions', path: '/actions', icon: ShieldAlert },
     { name: 'Scenario Lab', path: '/scenario-lab', icon: Sliders },
     { name: 'AI Copilot', path: '/copilot', icon: Bot },

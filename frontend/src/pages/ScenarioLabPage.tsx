@@ -1,15 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { ScenarioLab } from '../components/ScenarioLab';
+import { useBatchStore } from '../store/batchStore';
 
 export const ScenarioLabPage: React.FC = () => {
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 200);
-    return () => clearTimeout(timer);
-  }, []);
+  const { loading } = useBatchStore();
 
   return (
     <div className="space-y-6 md:space-y-8">
@@ -20,7 +14,8 @@ export const ScenarioLabPage: React.FC = () => {
       </div>
 
       {/* Simulator Widget */}
-      <ScenarioLab isLoading={isLoading} />
+      <ScenarioLab isLoading={loading} />
     </div>
   );
 };
+export default ScenarioLabPage;

@@ -2,10 +2,10 @@ import type { FinancialSummary, ChatResponse } from '../types';
 
 const BASE_URL = 'http://127.0.0.1:8000';
 
-export async function getFinancials(): Promise<FinancialSummary> {
-  const response = await fetch(`${BASE_URL}/api/financials`);
+export async function getFinancials(): Promise<any> {
+  const response = await fetch(`${BASE_URL}/api/batches`);
   if (!response.ok) {
-    throw new Error(`Failed to fetch financial data: ${response.statusText}`);
+    throw new Error(`Failed to check connection: ${response.statusText}`);
   }
   return response.json();
 }

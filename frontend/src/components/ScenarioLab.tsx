@@ -6,12 +6,15 @@ interface ScenarioLabProps {
   isLoading: boolean;
 }
 
+import { useBatchStore } from '../store/batchStore';
+
 export const ScenarioLab: React.FC<ScenarioLabProps> = ({ isLoading }) => {
+  const { analytics } = useBatchStore();
   const [delay, setDelay] = useState<number>(15);
 
-  // Calculations
-  const baseRunway = 18;
-  const baseMinCash = 120000;
+  // Calculations derived dynamically from active workspace snapshots
+  const baseRunway = analytics?.kpis?.cash_runway_days ?? 18;
+  const baseMinCash = analytics?.kpis?.liquidity_buffer ?? 120000;
 
   // Let runway fall by ~0.5 days per day of delay (minimum of 3 days)
   const currentRunway = Math.max(baseRunway - Math.round(delay * 0.5), 3);

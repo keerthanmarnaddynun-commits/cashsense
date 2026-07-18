@@ -1,18 +1,48 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { GemmaCopilot } from '../components/GemmaCopilot';
-import { sendChatMessage } from '../services/api';
+import { useBatchStore } from '../store/batchStore';
 import type { ChatMessage } from '../types';
+
+const BASE_URL = 'http://127.0.0.1:8000';
 
 export const CopilotPage: React.FC = () => {
   const location = useLocation();
+  const { selectedBatchId } = useBatchStore();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Load chat history for the active workspace batch
+  const loadChatHistory = async (batchId: string) => {
+    setIsLoading(true);
+    setErrorMsg(null);
+    try {
+      const res = await fetch(`${BASE_URL}/api/chat/history?batch_id=${batchId}`);
+      if (!res.ok) throw new Error('Failed to load chat logs');
+      const history = await res.json();
+      setMessages(history);
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message || 'Error loading message log');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedBatchId) {
+      loadChatHistory(selectedBatchId);
+    } else {
+      setMessages([]);
+    }
+  }, [selectedBatchId]);
+
   const handleSendChatMessage = async (messageText: string) => {
-    // Add user message
+    if (!selectedBatchId) return;
+
+    // Add user message to UI state
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -26,10 +56,21 @@ export const CopilotPage: React.FC = () => {
     setChatInput('');
 
     try {
-      const res = await sendChatMessage(messageText);
-      
+      const res = await fetch(`${BASE_URL}/api/chat?batch_id=${selectedBatchId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: messageText })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || 'Failed to send message');
+      }
+
+      const reply = await res.json();
+      let responseText = reply.response;
+
       // Upgrade default response text with structured headings for demo aesthetics
-      let responseText = res.response;
       if (
         responseText === 'Gemma AI response text...' || 
         (!responseText.toLowerCase().includes('primary risk') && messageText.includes('Shiva Logistics'))
@@ -67,10 +108,7 @@ export const CopilotPage: React.FC = () => {
   useEffect(() => {
     if (location.state && (location.state as any).query) {
       const queryText = (location.state as any).query;
-      // Clear location state immediately to prevent loop
       window.history.replaceState({}, document.title);
-      
-      // Submit query
       handleSendChatMessage(queryText);
     }
   }, [location.state]);
@@ -85,18 +123,25 @@ export const CopilotPage: React.FC = () => {
 
       {/* Expanded chat panel */}
       <div className="bg-charcoal-dark border border-white/5 rounded-[24px] overflow-hidden shadow-2xl h-[calc(100vh-210px)] max-h-[700px] flex flex-col justify-between">
-        <GemmaCopilot
-          messages={messages}
-          onSubmitMessage={handleSendChatMessage}
-          isLoading={isLoading}
-          inputValue={chatInput}
-          onInputChange={(val) => {
-            setChatInput(val);
-            if (errorMsg) setErrorMsg(null);
-          }}
-          errorMsg={errorMsg}
-        />
+        {selectedBatchId ? (
+          <GemmaCopilot
+            messages={messages}
+            onSubmitMessage={handleSendChatMessage}
+            isLoading={isLoading}
+            inputValue={chatInput}
+            onInputChange={(val) => {
+              setChatInput(val);
+              if (errorMsg) setErrorMsg(null);
+            }}
+            errorMsg={errorMsg}
+          />
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-gray-500 text-xs">
+            Select or create a workspace batch to initialize AI Chat context.
+          </div>
+        )}
       </div>
     </div>
   );
 };
+export default CopilotPage;
